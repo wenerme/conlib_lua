@@ -4,7 +4,38 @@
 #include <lualib.h>
 #include <lauxlib.h>
 #include <lua.h>
+
 #include "conlib.h"
+
+#define DEBUG
+#include "dbg.h"
+static int stackDump(lua_State* L)
+{
+	int i;
+	int top = lua_gettop(L);
+	puts("*stack*");
+	for(i = 1; i <= top; i++)
+	{
+		int t = lua_type(L, i);
+		switch(t)
+		{
+			case LUA_TSTRING:
+				printf("'%s'", lua_tostring(L, i));
+			break;
+			case LUA_TBOOLEAN:
+				printf(lua_toboolean(L, i)? "true": "false");
+			break;
+			case LUA_TNUMBER:
+				printf("%g", lua_tonumber(L, i));
+			break;
+			default:
+				printf("%s", lua_typename(L, t));
+			break;
+		}
+		putchar('\n');// 每行一个
+	}
+	return 0;
+}
 
 #define PROJECT_TABLENAME "conlib"
 #define MAX_TITLE_LENGTH 256
@@ -214,54 +245,64 @@ static void set_ctrl_key_state(lua_State *L, const ConControlKeyState *cks)
 	lua_remove(L, -1);
 }
 
-// table([table]) 参数table可选,如果有则不创建table
+// table/nil([table]) 参数table可选,如果有则不创建table
 static int l_getkey(lua_State *L)
 {
-	if(lua_istable(L, 1))
+	// 更新键值
+	l_key = getkey();
+	if(NULL == l_key)
 	{
+		lua_pushnil(L);
+		return 1;
+	}
+	
+	// 有参数
+	stackDump(L);
+	if(lua_gettop(L) != 0)
+	{
+		luaL_checktype(L, 1, LUA_TTABLE);
 		lua_pushvalue(L, 1);
-	}else if(lua_gettop(L) != 0)
-	{
-		// 有参数 担不是 table 报错
-		luaL_error(L, "the optional parammater must be table");
 	}else
 	{
 		// 生成一个新table
 		lua_newtable(L);
 	}
 	// 此时需要返回的table在stacktop
-	// 更新键值
-	getkey();
-	
 	lua_pushinteger(L, l_key->key);
 	lua_setfield(L, -2, "key");
 
 	lua_pushboolean(L, l_key->state);
 	lua_setfield(L, -2, "state");
 
+	lua_pushinteger(L, (int)l_key->ascii);
+	lua_setfield(L, -2, "ascii");
+
 	set_ctrl_key_state(L, l_key->ctrl_key_state);
 
 	return 1;
 }
 
-// table([table]) 参数table可选,如果有则不创建table
+// table/nil([table]) 参数table可选,如果有则不创建table
 static int l_getmouse(lua_State *L)
 {
-	if(lua_istable(L, 1))
+	// 更新值
+	l_mouse = getmouse();
+	if(NULL == l_mouse)
 	{
+		lua_pushnil(L);
+		return 1;
+	}
+
+	if(lua_gettop(L) != 0)
+	{
+		luaL_checktype(L, 1, LUA_TTABLE);
 		lua_pushvalue(L, 1);
-	}else if(lua_gettop(L) != 0)
-	{
-		// 有参数 担不是 table 报错
-		luaL_error(L, "the optional parammater must be table");
 	}else
 	{
 		// 生成一个新table
 		lua_newtable(L);
 	}
 	// 此时需要返回的table在stacktop
-	// 更新值
-	getmouse();
 	
 	lua_pushinteger(L, l_mouse->x);
 	lua_setfield(L, -2, "x");
@@ -282,14 +323,83 @@ static int l_getmouse(lua_State *L)
 }
 
 
-// 初始化
+// 初始化 当前栈顶为需要附加的table
 static int l_conlib_init(lua_State *L)
 {
-	// 键盘和鼠标获取对象
-	l_key = getkey();
-	l_mouse = getmouse();
-	
 	// 预定义颜色值
+	lua_newtable(L);
+
+	lua_pushinteger(L, ConRed);
+	lua_setfield(L, -2, "Red");
+	lua_pushinteger(L, ConGreen);
+	lua_setfield(L, -2, "Green");
+	lua_pushinteger(L, ConBlue);
+	lua_setfield(L, -2, "Blue");
+	lua_pushinteger(L, ConWhite);
+	lua_setfield(L, -2, "White");
+	lua_pushinteger(L, ConBlack);
+	lua_setfield(L, -2, "Black");
+
+	//
+	lua_setfield(L, -2, "Color");
+	
+	// 预定义的鼠标事件
+	lua_newtable(L);
+
+	lua_pushinteger(L, ConMOUSE_MOVED);
+	lua_setfield(L, -2, "Moved");
+	lua_pushinteger(L, ConMOUSE_CLICK);
+	lua_setfield(L, -2, "Click");
+	lua_pushinteger(L, ConMOUSE_DBCLICK);
+	lua_setfield(L, -2, "DBClick");
+	lua_pushinteger(L, ConMOUSE_HWHEELED);
+	lua_setfield(L, -2, "HWheeled");
+	lua_pushinteger(L, ConMOUSE_WHEELED);
+	lua_setfield(L, -2, "Wheeled");
+	lua_pushinteger(L, ConMOUSE_RELEASED);
+	lua_setfield(L, -2, "Released");
+
+	//
+	lua_setfield(L, -2, "MouseEvent");
+	
+	// 预定义的鼠标按键
+	lua_newtable(L);
+
+	lua_pushinteger(L, ConMOUSE_LEFT_BUTTON);
+	lua_setfield(L, -2, "Left");
+	lua_pushinteger(L, ConMOUSE_CENTER_BUTTON);
+	lua_setfield(L, -2, "Center");
+	lua_pushinteger(L, ConMOUSE_RIGHT_BUTTON);
+	lua_setfield(L, -2, "Right");
+	//
+	lua_setfield(L, -2, "MouseKey");
+
+	// 预定义虚拟按键
+	lua_newtable(L);
+	lua_pushinteger(L, ConKEY_BACKSPACE);
+	lua_setfield(L, -2, "Backspace");
+	lua_pushinteger(L, ConKEY_TAB);
+	lua_setfield(L, -2, "Tab");
+	lua_pushinteger(L, ConKEY_ESCAPE);
+	lua_setfield(L, -2, "Escape");
+	lua_pushinteger(L, ConKEY_SPACE);
+	lua_setfield(L, -2, "Space");
+	lua_pushinteger(L, ConKEY_LEFT);
+	lua_setfield(L, -2, "Left");
+	lua_pushinteger(L, ConKEY_UP);
+	lua_setfield(L, -2, "Up");
+	lua_pushinteger(L, ConKEY_RIGHT);
+	lua_setfield(L, -2, "Right");
+	lua_pushinteger(L, ConKEY_DOWN);
+	lua_setfield(L, -2, "Down");
+	lua_pushinteger(L, ConKEY_RETURN);
+	lua_setfield(L, -2, "Return");
+	lua_pushinteger(L, ConKEY_CONTROL);
+	lua_setfield(L, -2, "Control");
+	lua_pushinteger(L, ConKEY_ALT);
+	lua_setfield(L, -2, "Alt");
+	//
+	lua_setfield(L, -2, "Key");
 	return 0;
 }
 
@@ -322,7 +432,13 @@ LUAMOD_API int luaopen_conlib(lua_State *L)
 	//
 	// 初始化 conlib 库
 	conlib_init();
-	luaL_openlib(L, PROJECT_TABLENAME, conlib, 0);
+	/* luaL_openlib(L, PROJECT_TABLENAME, conlib, 0); */
+	luaL_newlib(L, conlib);
+	lua_setglobal(L, PROJECT_TABLENAME);
+
+	// 在这个table上初始
+	lua_getglobal(L, PROJECT_TABLENAME);
 	l_conlib_init(L);
+	
 	return 1;
 }
