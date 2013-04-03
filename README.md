@@ -10,6 +10,7 @@ Site: [Blog.wener.me](http://blog.wener.me)
 
 ## 描述:
 * 供lua使用的conlib
+* C的[conlib](https://github.com/WenerLove/conlib)
 
 ## *Tips*:
 * require "conlib"
