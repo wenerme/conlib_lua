@@ -9,33 +9,6 @@
 
 #define DEBUG
 #include "dbg.h"
-static int stackDump(lua_State* L)
-{
-	int i;
-	int top = lua_gettop(L);
-	puts("*stack*");
-	for(i = 1; i <= top; i++)
-	{
-		int t = lua_type(L, i);
-		switch(t)
-		{
-			case LUA_TSTRING:
-				printf("'%s'", lua_tostring(L, i));
-			break;
-			case LUA_TBOOLEAN:
-				printf(lua_toboolean(L, i)? "true": "false");
-			break;
-			case LUA_TNUMBER:
-				printf("%g", lua_tonumber(L, i));
-			break;
-			default:
-				printf("%s", lua_typename(L, t));
-			break;
-		}
-		putchar('\n');// 每行一个
-	}
-	return 0;
-}
 
 #define PROJECT_TABLENAME "conlib"
 #define MAX_TITLE_LENGTH 256
@@ -257,7 +230,6 @@ static int l_getkey(lua_State *L)
 	}
 	
 	// 有参数
-	stackDump(L);
 	if(lua_gettop(L) != 0)
 	{
 		luaL_checktype(L, 1, LUA_TTABLE);
